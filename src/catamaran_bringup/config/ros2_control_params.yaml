@@ -5,9 +5,16 @@ controller_manager:
     thruster_test_controller:
       type: forward_command_controller/ForwardCommandController
 
+    body_force_controller:
+      type: catamaran_controllers/BodyForceController
+
 thruster_test_controller:
   ros__parameters:
     joints:
       - left_thruster_joint
       - right_thruster_joint
     interface_name: effort
+
+body_force_controller:
+  ros__parameters:
+    input_topic: /body_force/command

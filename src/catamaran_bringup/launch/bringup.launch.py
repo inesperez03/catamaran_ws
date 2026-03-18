@@ -37,7 +37,14 @@ def generate_launch_description():
     thruster_test_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["thruster_test_controller"],
+        arguments=["thruster_test_controller", "--inactive"],
+        output="screen"
+    )
+
+    body_force_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["body_force_controller", "--inactive"],
         output="screen"
     )
 
@@ -48,5 +55,6 @@ def generate_launch_description():
             description="Execution environment: real or sim"
         ),
         ros2_control_node,
-        thruster_test_spawner
+        thruster_test_spawner,
+        body_force_spawner
     ])

@@ -1,0 +1,8 @@
+<library path="catamaran_controllers">
+  <class
+    name="catamaran_controllers/BodyForceController"
+    type="catamaran_controllers::BodyForceController"
+    base_class_type="controller_interface::ControllerInterface">
+    <description>Controller that converts body-axis force into thruster efforts</description>
+  </class>
+</library>
