@@ -1,10 +1,14 @@
 #pragma once
 
 #include <string>
+#include <vector>
+
+#include <Eigen/Dense>
 
 #include "controller_interface/controller_interface.hpp"
 #include "geometry_msgs/msg/wrench.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "urdf/model.h"
 
 namespace catamaran_controllers
 {
@@ -31,8 +35,28 @@ public:
     const rclcpp::Duration & period) override;
 
 private:
+  static Eigen::Isometry3d urdfPoseToEigen(const urdf::Pose & pose);
+
+  Eigen::Isometry3d jointPoseInBase(
+    const urdf::Model & model,
+    const std::string & joint_name,
+    const std::string & base_link) const;
+
+  bool buildThrusterAllocationMatrix(
+    const urdf::Model & model,
+    const std::string & base_link,
+    const std::vector<std::string> & thruster_joints);
+
+  Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd & matrix, double tolerance = 1e-6) const;
+
   rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr body_force_sub_;
-  double desired_body_force_{0.0};
+
+  std::string base_link_;
+  std::vector<std::string> thruster_joints_;
+
+  Eigen::MatrixXd thruster_allocation_matrix_;
+
+  Eigen::Matrix<double, 6, 1> desired_wrench_ = Eigen::Matrix<double, 6, 1>::Zero();
 };
 
 }  // namespace catamaran_controllers

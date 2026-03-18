@@ -17,14 +17,14 @@
   <joint name="left_thruster_joint" type="fixed">
     <parent link="base_link"/>
     <child link="left_thruster_link"/>
-    <origin xyz="-1.10892 -0.619006 0.015928" rpy="0 -1.57 0"/>
+    <origin xyz="-1.10892 -0.619006 0.015928" rpy="0 0 0"/>
   </joint>
 
   <link name="right_thruster_link"/>
   <joint name="right_thruster_joint" type="fixed">
     <parent link="base_link"/>
     <child link="right_thruster_link"/>
-    <origin xyz="-1.10892 0.66431 0.015928" rpy="0 -1.57 0"/>
+    <origin xyz="-1.10892 0.66431 0.015928" rpy="0 0 0"/>
   </joint>
 
   <ros2_control name="CatamaranSystem" type="system">

@@ -1,26 +1,178 @@
 #include "catamaran_controllers/body_force_controller.hpp"
 
+#include <sstream>
 #include <string>
+#include <vector>
 
-#include "geometry_msgs/msg/wrench.hpp"
 #include "pluginlib/class_list_macros.hpp"
 
 namespace catamaran_controllers
 {
 
+Eigen::Isometry3d BodyForceController::urdfPoseToEigen(const urdf::Pose & pose)
+{
+  Eigen::Quaterniond q(
+    pose.rotation.w,
+    pose.rotation.x,
+    pose.rotation.y,
+    pose.rotation.z);
+
+  Eigen::Isometry3d T = Eigen::Isometry3d::Identity();
+  T.linear() = q.normalized().toRotationMatrix();
+  T.translation() = Eigen::Vector3d(
+    pose.position.x,
+    pose.position.y,
+    pose.position.z);
+
+  return T;
+}
+
+Eigen::Isometry3d BodyForceController::jointPoseInBase(
+  const urdf::Model & model,
+  const std::string & joint_name,
+  const std::string & base_link) const
+{
+  auto joint = model.getJoint(joint_name);
+  if (!joint) {
+    throw std::runtime_error("Joint not found: " + joint_name);
+  }
+
+  Eigen::Isometry3d T = Eigen::Isometry3d::Identity();
+
+  while (joint) {
+    T = urdfPoseToEigen(joint->parent_to_joint_origin_transform) * T;
+
+    if (joint->parent_link_name == base_link) {
+      return T;
+    }
+
+    auto parent_link = model.getLink(joint->parent_link_name);
+    if (!parent_link) {
+      throw std::runtime_error(
+        "Parent link not found while resolving chain for joint: " + joint_name);
+    }
+
+    joint = parent_link->parent_joint;
+  }
+
+  throw std::runtime_error(
+    "Joint " + joint_name + " is not connected to base link " + base_link);
+}
+
+bool BodyForceController::buildThrusterAllocationMatrix(
+  const urdf::Model & model,
+  const std::string & base_link,
+  const std::vector<std::string> & thruster_joints)
+{
+  const std::size_t n = thruster_joints.size();
+  if (n == 0) {
+    RCLCPP_ERROR(get_node()->get_logger(), "No thruster joints provided");
+    return false;
+  }
+
+  thruster_allocation_matrix_.resize(6, static_cast<int>(n));
+
+  for (std::size_t i = 0; i < n; ++i) {
+    const auto & joint_name = thruster_joints[i];
+
+    Eigen::Isometry3d T_base_thruster;
+    try {
+      T_base_thruster = jointPoseInBase(model, joint_name, base_link);
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(
+        get_node()->get_logger(), "Error resolving joint '%s': %s",
+        joint_name.c_str(), e.what());
+      return false;
+    }
+
+    const Eigen::Vector3d r = T_base_thruster.translation();
+    const Eigen::Vector3d d = T_base_thruster.rotation() * Eigen::Vector3d::UnitX();
+    const Eigen::Vector3d m = r.cross(d);
+
+    thruster_allocation_matrix_.block<3, 1>(0, static_cast<int>(i)) = d;
+    thruster_allocation_matrix_.block<3, 1>(3, static_cast<int>(i)) = m;
+
+    RCLCPP_INFO(
+      get_node()->get_logger(),
+      "Thruster '%s': r = [%.3f %.3f %.3f], d = [%.3f %.3f %.3f], rxd = [%.3f %.3f %.3f]",
+      joint_name.c_str(),
+      r.x(), r.y(), r.z(),
+      d.x(), d.y(), d.z(),
+      m.x(), m.y(), m.z());
+  }
+
+  std::ostringstream oss;
+  oss << "\nThruster Allocation Matrix B (6x" << n << "):\n" << thruster_allocation_matrix_;
+  RCLCPP_INFO(get_node()->get_logger(), "%s", oss.str().c_str());
+
+  return true;
+}
+
+Eigen::MatrixXd BodyForceController::pseudoInverse(
+  const Eigen::MatrixXd & matrix,
+  double tolerance) const
+{
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(
+    matrix, Eigen::ComputeThinU | Eigen::ComputeThinV);
+
+  const auto & singular_values = svd.singularValues();
+  Eigen::MatrixXd singular_values_inv =
+    Eigen::MatrixXd::Zero(svd.matrixV().cols(), svd.matrixU().cols());
+
+  for (int i = 0; i < singular_values.size(); ++i) {
+    if (singular_values(i) > tolerance) {
+      singular_values_inv(i, i) = 1.0 / singular_values(i);
+    }
+  }
+
+  return svd.matrixV() * singular_values_inv * svd.matrixU().transpose();
+}
+
 controller_interface::CallbackReturn BodyForceController::on_init()
 {
   auto_declare<std::string>("input_topic", "/body_force/command");
+  auto_declare<std::string>("base_link", "base_link");
+  auto_declare<std::vector<std::string>>(
+    "thruster_joints",
+    std::vector<std::string>{"left_thruster_joint", "right_thruster_joint"});
+
+  const std::string robot_description =
+    get_node()->get_parameter("robot_description").as_string();
+
+  if (robot_description.empty()) {
+    RCLCPP_ERROR(get_node()->get_logger(), "robot_description is empty");
+    return controller_interface::CallbackReturn::ERROR;
+  }
+
+  base_link_ = get_node()->get_parameter("base_link").as_string();
+  thruster_joints_ = get_node()->get_parameter("thruster_joints").as_string_array();
+
+  urdf::Model model;
+  if (!model.initString(robot_description)) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Failed to parse robot_description");
+    return controller_interface::CallbackReturn::ERROR;
+  }
+
+  if (!buildThrusterAllocationMatrix(model, base_link_, thruster_joints_)) {
+    return controller_interface::CallbackReturn::ERROR;
+  }
+
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
 controller_interface::InterfaceConfiguration
 BodyForceController::command_interface_configuration() const
 {
+  std::vector<std::string> names;
+  names.reserve(thruster_joints_.size());
+
+  for (const auto & joint_name : thruster_joints_) {
+    names.push_back(joint_name + "/effort");
+  }
+
   return {
     controller_interface::interface_configuration_type::INDIVIDUAL,
-    {"left_thruster_joint/effort", "right_thruster_joint/effort"}
-  };
+    names};
 }
 
 controller_interface::InterfaceConfiguration
@@ -28,8 +180,7 @@ BodyForceController::state_interface_configuration() const
 {
   return {
     controller_interface::interface_configuration_type::NONE,
-    {}
-  };
+    {}};
 }
 
 controller_interface::CallbackReturn BodyForceController::on_configure(
@@ -43,24 +194,38 @@ controller_interface::CallbackReturn BodyForceController::on_configure(
     10,
     [this](const geometry_msgs::msg::Wrench::SharedPtr msg)
     {
-      desired_body_force_ = msg->force.x;
+      desired_wrench_(0) = msg->force.x;
+      desired_wrench_(1) = msg->force.y;
+      desired_wrench_(2) = msg->force.z;
+      desired_wrench_(3) = msg->torque.x;
+      desired_wrench_(4) = msg->torque.y;
+      desired_wrench_(5) = msg->torque.z;
     });
 
-  desired_body_force_ = 0.0;
+  desired_wrench_.setZero();
+
+  RCLCPP_INFO(get_node()->get_logger(), "Configured BodyForceController");
+  RCLCPP_INFO(get_node()->get_logger(), "Input topic: %s", input_topic.c_str());
+
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
 controller_interface::CallbackReturn BodyForceController::on_activate(
   const rclcpp_lifecycle::State &)
 {
-  desired_body_force_ = 0.0;
+  desired_wrench_.setZero();
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
 controller_interface::CallbackReturn BodyForceController::on_deactivate(
   const rclcpp_lifecycle::State &)
 {
-  desired_body_force_ = 0.0;
+  desired_wrench_.setZero();
+
+  for (auto & command_interface : command_interfaces_) {
+    command_interface.set_value(0.0);
+  }
+
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -68,15 +233,27 @@ controller_interface::return_type BodyForceController::update(
   const rclcpp::Time &,
   const rclcpp::Duration &)
 {
-  const double force_per_thruster = desired_body_force_ / 2.0;
+  const Eigen::MatrixXd B_pinv = pseudoInverse(thruster_allocation_matrix_);
+  const Eigen::VectorXd thruster_forces = B_pinv * desired_wrench_;
 
-  command_interfaces_[0].set_value(force_per_thruster);
-  command_interfaces_[1].set_value(force_per_thruster);
+  // Comprueba que el tamaño del vector de fuerzas de los thrusters coincide con el número de interfaces de comando
+  if (thruster_forces.size() != static_cast<int>(command_interfaces_.size())) {
+    RCLCPP_ERROR_THROTTLE(
+      get_node()->get_logger(),
+      *get_node()->get_clock(),
+      2000,
+      "Thruster force vector size does not match number of command interfaces");
+    return controller_interface::return_type::ERROR;
+  }
+
+  for (int i = 0; i < thruster_forces.size(); ++i) {
+    command_interfaces_[i].set_value(thruster_forces(i));
+  }
 
   return controller_interface::return_type::OK;
 }
 
-}
+}  // namespace catamaran_controllers
 
 PLUGINLIB_EXPORT_CLASS(
   catamaran_controllers::BodyForceController,

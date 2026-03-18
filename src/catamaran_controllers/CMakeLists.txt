@@ -11,11 +11,20 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(std_msgs REQUIRED)
-
-include_directories(include)
+find_package(geometry_msgs REQUIRED)
+find_package(urdf REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 add_library(${PROJECT_NAME} SHARED
   src/body_force_controller.cpp
+)
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+  include
+)
+
+target_link_libraries(${PROJECT_NAME}
+  Eigen3::Eigen
 )
 
 ament_target_dependencies(${PROJECT_NAME}
@@ -24,6 +33,8 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   rclcpp_lifecycle
   std_msgs
+  geometry_msgs
+  urdf
 )
 
 pluginlib_export_plugin_description_file(
@@ -52,6 +63,9 @@ ament_export_dependencies(
   rclcpp
   rclcpp_lifecycle
   std_msgs
+  geometry_msgs
+  urdf
+  Eigen3
 )
 
 ament_package()

@@ -4,25 +4,21 @@
 
 `catamaran_bringup` es el paquete encargado de arrancar el sistema del catamarán.
 
-Su función es:
+Se encarga de:
 
-* generar la descripción del robot desde el Xacro,
+* generar la descripción del robot (URDF desde Xacro),
 * lanzar `ros2_control_node`,
 * cargar el hardware interface,
-* cargar los controladores necesarios.
+* cargar los controladores.
 
 ---
 
-## Modos de funcionamiento
+## Modo de ejecución
 
-Actualmente el sistema puede arrancar en dos modos:
+El sistema puede arrancarse en dos modos:
 
-* `real`
-* `sim`
-
-Por defecto arranca en:
-
-* `real`
+* `real` --> para el robot real (por defecto se lanza este)
+* `sim` --> para usarse con la simulacion en Stonefish
 
 Ejemplo:
 
@@ -32,41 +28,42 @@ ros2 launch catamaran_bringup bringup.launch.py environment:=sim
 
 ---
 
-## Qué lanza actualmente
+## Controladores disponibles
 
-Actualmente este paquete lanza:
+Actualmente hay dos controladores:
 
-* `ros2_control_node`
-* el hardware interface `CatamaranSystem`
-* el controlador de prueba `thruster_test_controller`
+* `thruster_test_controller`
+* `body_force_controller`
 
 ---
 
-## Controlador de prueba
+## 1. thruster_test_controller
 
-El controlador de prueba actual es:
+### Qué hace
 
-* `thruster_test_controller`
+Controlador simple para enviar fuerza directamente a cada thruster.
 
-Este controlador permite enviar fuerza directamente a cada thruster por separado a través de:
+No hace ningún cálculo: lo que envías es lo que se aplica.
+
+---
+
+### Topic
 
 ```text
 /thruster_test_controller/commands
 ```
 
-Tipo de mensaje:
+---
+
+### Tipo de mensaje
 
 ```text
 std_msgs/msg/Float64MultiArray
 ```
 
-Formato:
+---
 
-```text
-[left_force, right_force]
-```
-
-Ejemplo:
+### Ejemplo
 
 ```bash
 ros2 topic pub /thruster_test_controller/commands std_msgs/msg/Float64MultiArray "{data: [-20.0, -10.0]}"
@@ -74,29 +71,56 @@ ros2 topic pub /thruster_test_controller/commands std_msgs/msg/Float64MultiArray
 
 ---
 
-## Para qué sirve ahora
+## 2. body_force_controller
 
-En el estado actual del proyecto, `catamaran_bringup` se usa para:
+Qué hace
 
-* arrancar el hardware interface,
-* validar el funcionamiento de `ros2_control`,
-* probar la conversión de fuerza a PWM en el robot real,
-* probar la conversión de fuerza a valores Stonefish en simulación.
+Controlador que recibe un Wrench (fuerza + momento del robot) y calcula automáticamente cuánto debe empujar cada thruster.
+
+Internamente:
+
+usa el URDF para obtener la posición y orientación de cada thruster,
+
+construye la Thruster Allocation Matrix (TAM),
+
+en cada ciclo calcula las fuerzas de los thrusters a partir del wrench usando:
+
+u = B⁻1 · τ
+
+Donde:
+
+τ es el Wrench (fuerza + momento del cuerpo),
+
+B-1 es la inversa de la TAM,
+
+u son las fuerzas de los thrusters.
 
 ---
 
-## Ficheros importantes
+### Topic
 
-* `launch/bringup.launch.py`
-  Launch principal del sistema.
-
-* `config/ros2_control_params.yaml`
-  Configuración de `controller_manager` y de los controladores.
+```text
+/body_force/command
+```
 
 ---
 
-## Estado actual
+### Tipo de mensaje
 
-Ahora mismo este paquete está orientado a pruebas de hardware y validación del sistema base.
+```text
+geometry_msgs/msg/Wrench
+```
 
-Más adelante se ampliará para incluir otros controladores y modos de operación del catamarán.
+---
+
+### Ejemplo
+
+```bash
+ros2 topic pub /body_force_command geometry_msgs/msg/Wrench "{force: {x: 0.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 20.0}}"
+```
+
+---
+
+## Estado
+
+Actualmente orientado a pruebas del sistema y control básico del catamarán.
