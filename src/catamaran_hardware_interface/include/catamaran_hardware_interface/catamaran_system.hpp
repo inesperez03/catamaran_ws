@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <limits>
 
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
@@ -64,4 +65,4 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr thruster_stonefish_pub_;
 };
 
-}  // namespace catamaran_hardware_interface
+}
