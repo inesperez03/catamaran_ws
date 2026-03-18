@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<robot name="catamaran" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="environment" default="real"/>
+  <xacro:arg name="lookup_csv" default=""/>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://catamaran_description/meshes/catamaran.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="left_thruster_link"/>
+  <joint name="left_thruster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="left_thruster_link"/>
+    <origin xyz="-1.10892 -0.619006 0.015928" rpy="0 -1.57 0"/>
+  </joint>
+
+  <link name="right_thruster_link"/>
+  <joint name="right_thruster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="right_thruster_link"/>
+    <origin xyz="-1.10892 0.66431 0.015928" rpy="0 -1.57 0"/>
+  </joint>
+
+  <ros2_control name="CatamaranSystem" type="system">
+    <hardware>
+      <plugin>catamaran_hardware_interface/CatamaranSystem</plugin>
+      <param name="environment">$(arg environment)</param>
+      <param name="lookup_csv">$(arg lookup_csv)</param>
+    </hardware>
+
+    <joint name="left_thruster_joint">
+      <command_interface name="effort"/>
+      <state_interface name="effort"/>
+    </joint>
+
+    <joint name="right_thruster_joint">
+      <command_interface name="effort"/>
+      <state_interface name="effort"/>
+    </joint>
+  </ros2_control>
+
+</robot>

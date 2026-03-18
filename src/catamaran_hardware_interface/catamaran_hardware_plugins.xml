@@ -1,0 +1,10 @@
+<library path="catamaran_hardware_interface">
+  <class
+    name="catamaran_hardware_interface/CatamaranSystem"
+    type="catamaran_hardware_interface::CatamaranSystem"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Hardware interface for catamaran thrusters
+    </description>
+  </class>
+</library>
