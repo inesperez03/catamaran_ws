@@ -14,7 +14,7 @@ def generate_launch_description():
     bringup_pkg = get_package_share_directory("catamaran_bringup")
 
     xacro_file = os.path.join(description_pkg, "urdf", "catamaran.urdf.xacro")
-    csv_file = os.path.join(hardware_pkg, "config", "thrusters_lookup.csv")
+    csv_file = os.path.join(hardware_pkg, "config", "thruster_lookup.csv")
     params_file = os.path.join(bringup_pkg, "config", "ros2_control_params.yaml")
 
     robot_description = Command([

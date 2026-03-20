@@ -48,6 +48,11 @@ install(
 )
 
 install(
+  DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
+install(
   FILES catamaran_hardware_plugins.xml
   DESTINATION share/${PROJECT_NAME}
 )

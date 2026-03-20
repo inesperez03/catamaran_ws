@@ -3,12 +3,22 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 #include "pluginlib/class_list_macros.hpp"
 
 namespace catamaran_hardware_interface
 {
+
+void CatamaranSystem::publish_zero_command()
+{
+  if (environment_ == "sim" && thruster_stonefish_pub_) {
+    std_msgs::msg::Float64MultiArray msg;
+    msg.data = {0.0, 0.0};
+    thruster_stonefish_pub_->publish(msg);
+  }
+}
 
 hardware_interface::CallbackReturn CatamaranSystem::on_init(
   const hardware_interface::HardwareInfo & info)
@@ -34,20 +44,29 @@ hardware_interface::CallbackReturn CatamaranSystem::on_init(
 
   for (const auto & joint : info_.joints) {
     if (joint.command_interfaces.size() != 1 || joint.command_interfaces[0].name != "effort") {
-      std::cerr << "Joint " << joint.name << " must have exactly one command interface: effort" << std::endl;
+      std::cerr << "Joint " << joint.name
+                << " must have exactly one command interface: effort" << std::endl;
       return hardware_interface::CallbackReturn::ERROR;
     }
 
     if (joint.state_interfaces.size() != 1 || joint.state_interfaces[0].name != "effort") {
-      std::cerr << "Joint " << joint.name << " must have exactly one state interface: effort" << std::endl;
+      std::cerr << "Joint " << joint.name
+                << " must have exactly one state interface: effort" << std::endl;
       return hardware_interface::CallbackReturn::ERROR;
     }
   }
+
+  is_active_ = false;
 
   left_force_cmd_ = 0.0;
   right_force_cmd_ = 0.0;
   left_force_state_ = 0.0;
   right_force_state_ = 0.0;
+
+  last_left_force_cmd_ = std::numeric_limits<double>::quiet_NaN();
+  last_right_force_cmd_ = std::numeric_limits<double>::quiet_NaN();
+  last_left_output_ = std::numeric_limits<double>::quiet_NaN();
+  last_right_output_ = std::numeric_limits<double>::quiet_NaN();
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -59,6 +78,11 @@ hardware_interface::CallbackReturn CatamaranSystem::on_configure(
     std::cerr << "Failed to load thruster lookup CSV: " << lookup_csv_path_ << std::endl;
     return hardware_interface::CallbackReturn::ERROR;
   }
+
+  is_active_ = false;
+
+  internal_node_.reset();
+  thruster_stonefish_pub_.reset();
 
   if (environment_ == "sim") {
     internal_node_ = std::make_shared<rclcpp::Node>("catamaran_hardware_interface_pub");
@@ -74,6 +98,105 @@ hardware_interface::CallbackReturn CatamaranSystem::on_configure(
   std::cout << "Environment: " << environment_ << std::endl;
   std::cout << "Loaded CSV samples: " << mapper_.size() << std::endl;
 
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn CatamaranSystem::on_cleanup(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  is_active_ = false;
+
+  left_force_cmd_ = 0.0;
+  right_force_cmd_ = 0.0;
+  left_force_state_ = 0.0;
+  right_force_state_ = 0.0;
+
+  publish_zero_command();
+
+  internal_node_.reset();
+  thruster_stonefish_pub_.reset();
+
+  last_left_force_cmd_ = std::numeric_limits<double>::quiet_NaN();
+  last_right_force_cmd_ = std::numeric_limits<double>::quiet_NaN();
+  last_left_output_ = std::numeric_limits<double>::quiet_NaN();
+  last_right_output_ = std::numeric_limits<double>::quiet_NaN();
+
+  std::cout << "CatamaranSystem cleaned up" << std::endl;
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn CatamaranSystem::on_shutdown(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  is_active_ = false;
+
+  left_force_cmd_ = 0.0;
+  right_force_cmd_ = 0.0;
+  left_force_state_ = 0.0;
+  right_force_state_ = 0.0;
+
+  publish_zero_command();
+
+  internal_node_.reset();
+  thruster_stonefish_pub_.reset();
+
+  std::cout << "CatamaranSystem shutdown completed" << std::endl;
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn CatamaranSystem::on_activate(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  is_active_ = true;
+
+  left_force_cmd_ = 0.0;
+  right_force_cmd_ = 0.0;
+  left_force_state_ = 0.0;
+  right_force_state_ = 0.0;
+
+  last_left_force_cmd_ = std::numeric_limits<double>::quiet_NaN();
+  last_right_force_cmd_ = std::numeric_limits<double>::quiet_NaN();
+  last_left_output_ = std::numeric_limits<double>::quiet_NaN();
+  last_right_output_ = std::numeric_limits<double>::quiet_NaN();
+
+  publish_zero_command();
+
+  std::cout << "CatamaranSystem activated" << std::endl;
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn CatamaranSystem::on_deactivate(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  is_active_ = false;
+
+  left_force_cmd_ = 0.0;
+  right_force_cmd_ = 0.0;
+  left_force_state_ = 0.0;
+  right_force_state_ = 0.0;
+
+  publish_zero_command();
+
+  std::cout << "CatamaranSystem deactivated" << std::endl;
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn CatamaranSystem::on_error(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  is_active_ = false;
+
+  left_force_cmd_ = 0.0;
+  right_force_cmd_ = 0.0;
+  left_force_state_ = 0.0;
+  right_force_state_ = 0.0;
+
+  publish_zero_command();
+
+  internal_node_.reset();
+  thruster_stonefish_pub_.reset();
+
+  std::cerr << "CatamaranSystem entered error state" << std::endl;
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -121,6 +244,13 @@ hardware_interface::return_type CatamaranSystem::write(
   const rclcpp::Time & /*time*/,
   const rclcpp::Duration & /*period*/)
 {
+  if (!is_active_) {
+    left_force_state_ = 0.0;
+    right_force_state_ = 0.0;
+    publish_zero_command();
+    return hardware_interface::return_type::OK;
+  }
+
   const double left_pwm = mapper_.forceToPwm(left_force_cmd_);
   const double right_pwm = mapper_.forceToPwm(right_force_cmd_);
 

@@ -2,6 +2,10 @@ controller_manager:
   ros__parameters:
     update_rate: 50
 
+    hardware_components_initial_state:
+      inactive:
+        - CatamaranSystem
+
     thruster_test_controller:
       type: forward_command_controller/ForwardCommandController
 
