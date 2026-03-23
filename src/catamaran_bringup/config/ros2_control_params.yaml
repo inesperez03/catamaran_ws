@@ -11,6 +11,9 @@ controller_manager:
 
     body_force_controller:
       type: catamaran_controllers/BodyForceController
+    
+    body_velocity_controller:
+      type: catamaran_controllers/BodyVelocityController
 
 thruster_test_controller:
   ros__parameters:
@@ -22,3 +25,17 @@ thruster_test_controller:
 body_force_controller:
   ros__parameters:
     input_topic: /body_force/command
+
+body_velocity_controller:
+  ros__parameters:
+    cmd_vel_topic: /cmd_vel
+    navigator_topic: /navigator_msg
+    body_force_controller_name: body_force_controller
+
+    kp_u: 50.0
+    ki_u: 0.0
+    kd_u: 5.0
+
+    kp_r: 20.0
+    ki_r: 0.0
+    kd_r: 2.0
