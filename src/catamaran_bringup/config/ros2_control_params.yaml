@@ -32,10 +32,10 @@ body_velocity_controller:
     navigator_topic: /navigator_msg
     body_force_controller_name: body_force_controller
 
-    kp_u: 50.0
-    ki_u: 0.0
+    kp_u: 4000.0
+    ki_u: 80.0
     kd_u: 5.0
 
-    kp_r: 20.0
-    ki_r: 0.0
+    kp_r: 1500.0
+    ki_r: 40.0
     kd_r: 2.0

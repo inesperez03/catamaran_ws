@@ -6,6 +6,7 @@
 
 #include "controller_interface/controller_interface.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "realtime_tools/realtime_buffer.hpp"
 #include "sura_msgs/msg/navigator.hpp"
@@ -36,13 +37,18 @@ public:
 
 private:
   using TwistMsg = geometry_msgs::msg::Twist;
-  using RobotStateMsg = sura_msgs::msg::Navigator;
+  using NavigatorMsg = sura_msgs::msg::Navigator;
+
+  rcl_interfaces::msg::SetParametersResult parametersCallback(
+    const std::vector<rclcpp::Parameter> & params);
 
   rclcpp::Subscription<TwistMsg>::SharedPtr cmd_vel_sub_;
-  rclcpp::Subscription<RobotStateMsg>::SharedPtr navigator_sub_;
+  rclcpp::Subscription<NavigatorMsg>::SharedPtr navigator_sub_;
 
   realtime_tools::RealtimeBuffer<std::shared_ptr<TwistMsg>> cmd_vel_buffer_;
-  realtime_tools::RealtimeBuffer<std::shared_ptr<RobotStateMsg>> navigator_buffer_;
+  realtime_tools::RealtimeBuffer<std::shared_ptr<NavigatorMsg>> navigator_buffer_;
+
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
 
   std::string cmd_vel_topic_;
   std::string navigator_topic_;
