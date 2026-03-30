@@ -1,0 +1,12 @@
+[submodule "src/catamaran_controllers"]
+	path = src/catamaran_controllers
+	url = https://github.com/inesperez03/catamaran_controllers.git
+[submodule "src/catamaran_navigator"]
+	path = src/catamaran_navigator
+	url = https://github.com/inesperez03/catamaran_navigator.git
+[submodule "src/sura_msgs"]
+	path = src/sura_msgs
+	url = https://github.com/inesperez03/sura_msgs.git
+[submodule "src/thrusters_hardware_interface"]
+	path = src/thrusters_hardware_interface
+	url = https://github.com/inesperez03/thrusters_hardware_interface.git
